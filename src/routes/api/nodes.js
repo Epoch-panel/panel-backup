@@ -1,9 +1,6 @@
 module.exports = async function () {
   app.post('/api/nodes/add', async (req, res) => {
     try {
-      if (!req.session.user) {
-        return res.status(401).send({ error: 'Unauthorized' });
-      }
       const { name, nodeLocation, nodeRAM, ramOverAllocation, nodeDisk, diskOverAllocation, isPrivate, nodeUrl } = req.body;
 
       const nodes = (await db.get('nodes')) || [];

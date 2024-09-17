@@ -1,56 +1,89 @@
-function setcookies(res, name, value, options = {}) {
-  const { maxAge, path, domain, secure, httpOnly, sameSite } = options;
+require('./modules')
 
-  let cookieStr = `${name}=${encodeURIComponent(value)}`;
+const s = path.join(__dirname, '../../storage/database/sessions/sessions.json');
+let sessions = {};
 
-  if (maxAge) {
-    cookieStr += `; Max-Age=${maxAge}`;
+function loadSessions() {
+  if (fs.existsSync(s)) {
+    const data = fs.readFileSync(s);
+    sessions = JSON.parse(data);
   }
-
-  if (path) {
-    cookieStr += `; Path=${path}`;
-  }
-
-  if (domain) {
-    cookieStr += `; Domain=${domain}`;
-  }
-
-  if (secure) {
-    cookieStr += `; Secure`;
-  }
-
-  if (httpOnly) {
-    cookieStr += `; HttpOnly`;
-  }
-
-  if (sameSite) {
-    cookieStr += `; SameSite=${sameSite}`;
-  }
-
-  res.setHeader('Set-Cookie', cookieStr);
 }
 
-function clearcookies(res, name, options = {}) {
-  const { path, domain, secure } = options;
+function saveSessions() {
+  fs.writeFileSync(s, JSON.stringify(sessions));
+}
 
-  let cookieStr = `${name}=; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+function setcookies(name, value, options = {}) {
+  const { maxAge, path, domain, secure, httpOnly, sameSite } = options;
+  let cookieStr = `${name}=${encodeURIComponent(value)}`;
+  if (maxAge) cookieStr += `; Max-Age=${maxAge}`;
+  if (path) cookieStr += `; Path=${path}`;
+  if (domain) cookieStr += `; Domain=${domain}`;
+  if (secure) cookieStr += `; Secure`;
+  if (httpOnly) cookieStr += `; HttpOnly`;
+  if (sameSite) cookieStr += `; SameSite=${sameSite}`;
+  return cookieStr;
+}
 
-  if (path) {
-    cookieStr += `; Path=${path}`;
+function clearcookies(name, options = {}) {
+  return setcookies(name, '', { ...options, maxAge: 0 });
+}
+
+function createSession(email, data) {
+  sessions[email] = data;
+  saveSessions();
+}
+
+function getSession(email) {
+  return sessions[email] || null;
+}
+
+function destroySession(email) {
+  delete sessions[email];
+  saveSessions();
+}
+
+function sessionMiddleware(req, res, next) {
+  console.log('Session middleware called');
+  const cookie = req.headers.cookie;
+  if (!cookie) {
+    req.session = null;
+    return next();
   }
 
-  if (domain) {
-    cookieStr += `; Domain=${domain}`;
+  const cookies = cookie.split(';').reduce((acc, c) => {
+    const [key, value] = c.trim().split('=');
+    acc[key] = decodeURIComponent(value);
+    return acc;
+  }, {});
+
+  const sessionCookie = cookies['user'];
+  if (sessionCookie) {
+    try {
+      const sessionData = JSON.parse(encrypt.base64_decode(sessionCookie));
+      console.log('Session data:', sessionData);
+      req.session = getSession(sessionData.email);
+      console.log('Session:', req.session);
+    } catch (e) {
+      console.error('Error parsing session cookie:', e);
+      req.session = null;
+    }
+  } else {
+    req.session = null;
   }
 
-  if (secure) {
-    cookieStr += `; Secure`;
-  }
-
-  res.setHeader('Set-Cookie', cookieStr);
+  next();
 }
 
 module.exports = {
   setcookies,
-  clearcookies
+  clearcookies,
+  createSession,
+  getSession,
+  destroySession,
+  loadSessions,
+  sessionMiddleware
 };
+
+loadSessions();

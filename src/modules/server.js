@@ -1,4 +1,5 @@
 const http = require('http');
+const WebSocket = require('ws');
 
 try {
   function parse(a, b, c, options) {
@@ -205,9 +206,10 @@ try {
     const wares = [];
     const bwares = [];
     const server = opts.server || http.createServer();
+    const staticd = {};
     const onErrorFn = opts.onError || onError;
     const onNoMatchFn = opts.onNoMatch || onError.bind(null, { code: 404 });
-
+  
     function add(method, pattern, ...fns) {
       const base = lead(value(pattern));
       if (apps[base]) return console.log("Handler is already in use!");
@@ -216,7 +218,7 @@ try {
       handlers[method] = handlers[method] || {};
       handlers[method][pattern] = fns;
     }
-
+  
     function use(base, ...fns) {
       if (typeof base === 'function') {
         wares.push(base, ...fns);
@@ -233,7 +235,36 @@ try {
         });
       }
     }
+  
+    function ws(pattern, wsHandler) {
+      routes['WS'] = routes['WS'] || [];
+      routes['WS'].push(parseThat(pattern));
+      handlers['WS'] = handlers['WS'] || {};
+      handlers['WS'][pattern] = wsHandler;
+    }
 
+    function static(base, dir) {
+      staticd[lead(base)] = path.resolve(dir);
+    }
+
+    function serveStatic(req, res) {
+      const base = Object.keys(staticd).find(base => req.path.startsWith(base));
+      if (base) {
+        const f = path.join(staticd[base], req.path.substring(base.length));
+        fs.stat(f, (err, stat) => {
+          if (err || !stat.isFile()) {
+            res.statusCode = 404;
+            res.end('File not found');
+          } else {
+            res.statusCode = 200;
+            fs.createReadStream(f).pipe(res);
+          }
+        });
+        return true; 
+      }
+      return false; 
+    }
+  
     async function handler(req, res) {
       const info = parseThis(req);
       req.originalUrl = req.originalUrl || req.url;
@@ -244,12 +275,26 @@ try {
       req.ip = req.socket.remoteAddress;
       req.domain = req.hostname;
 
-      // Adding `send` method to `res`
       res.send = (data) => {
         res.setHeader('Content-Type', 'application/json');
         res.end(typeof data === 'object' ? JSON.stringify(data) : data);
       };
 
+      res.status = (statusCode) => {
+        res.statusCode = statusCode;
+        return res;
+      };
+
+      res.redirect = (url, statusCode = 302) => {
+        res.statusCode = statusCode;
+        res.setHeader('Location', url);
+        res.end();
+      };
+
+      if (serveStatic(req, res)) {
+        return; 
+      }
+  
       let fns = [...wares];
       const obj = find(req.method, req.path, routes, handlers);
       if (obj) {
@@ -272,16 +317,31 @@ try {
       };
       await next();
     }
-
+  
     function listen() {
       server.on('request', handler);
+      server.on('upgrade', (req, socket, head) => {
+        const info = parseThis(req);
+        req.path = info.pathname;
+        const obj = find('WS', req.path, routes, handlers);
+        if (obj) {
+          req.params = obj.params;
+          obj.handlers.handleUpgrade(req, socket, head, (ws) => {
+            obj.handlers.emit('connection', ws, req);
+          });
+        } else {
+          socket.destroy();
+        }
+      });
       server.listen.apply(server, arguments);
     }
-
+  
     return {
       add,
       use,
       listen,
+      ws,
+      static,
       get: add.bind(null, 'GET'),
       post: add.bind(null, 'POST'),
       put: add.bind(null, 'PUT'),

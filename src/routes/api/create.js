@@ -1,22 +1,33 @@
 module.exports = async function () {
-  app.post('/servers/start', async (req, res) => {
+  app.post('/api/servers/create', async (req, res) => {
     try {
-      if (!req.session.user) {
-        return res.status(401).send({ error: 'Unauthorized' });
-      }
-      req.headers['api-key'] === process.env.API_KEY || res.status(apiKey ? 403 : 401).send('Unauthorized');
+      
+      const { ram, cpu, disk, node, softwarename, name, portc } = req.body
+      const email = req.session?.user?.email;
 
+      if (!email) {
+        return res.status(401).send('User not logged in');
+      }
       const nodes = await db.get('nodes') || [];
       const aaada = nodes.find(n => n.name === node);
+
 
       if (!aaada) {
         return res.status(404).send('Node not found');
       }
 
-      const software = await db.get('softwares').find(software => software.name === softwarename);
+      let eggs = await db.get('softwares') || [];
 
+      const software = eggs.find(s => s.name && s.name.toLowerCase() === softwarename.toLowerCase());
       if (!software) {
         return res.status(404).send('Software not found');
+      }
+
+      let users = await db.get('users') || {};
+      const user = users[email];
+  
+      if (!user) {
+        return res.status(404).send('User not found');
       }
 
       const serverId = makeuuid();
@@ -34,45 +45,74 @@ module.exports = async function () {
         return port;
       }
 
-      const port = pe();
+      const port = pe()
 
-      const response = await fetch('${aaada.nodeUrl}/servers/create`;', {
+      console.log({
+        image: Object.values(software.docker_images)[0],
+        installImage: software.scripts.installation.container,
+        env: software.variables.map(variable => `${variable.env_variable}=${variable.default_value}`).join(','),
+        ram,
+        cpu,
+        disk,
+        startup: software.startup,
+        install: software.scripts.installation.script, 
+        password,
+        sftpId,
+        port,
+        serverId
+      });
+      /*
+      const response = await fetch(`${aaada.nodeUrl}servers/create`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          image: software.images[0],
-          env: software.config.env_variables.map(variable => `${variable.env_variable}=${variable.default_value}`).join(','),
-          ram,
-          cpu,
-          disk,
-          cmd: software.startup, 
-          password: password, 
-          sftpId: sftpId, 
-          port: 25565, 
-          serverId: serverId
+          image: Object.values(software.docker_images)[0],
+          installImage: software.scripts.installation.container,
+        env: software.variables.map(variable => `${variable.env_variable}=${variable.default_value}`).join(','),
+        ram,
+        cpu,
+        disk,
+        startup: software.startup,
+        install: software.scripts.installation.script, 
+        password,
+        sftpId,
+        port: portc,
+        serverId
         })
       });
+      
+
+      console.log(response)
 
       if (!response.ok) {
-        throw new Error(`Failed to create server: ${responseData.message}`);
+        throw new Error(`Failed to create server: ${response.message}`);
       }
-
+*/
       const serverDetails = {
-        name: serverName,
+        name: name,
         sftpId: sftpId,
         port: port,
         ram,
         cpu,
         disk,
-        softwareName,
+        softwarename,
         password: password,
         serverId: serverId
       };
 
-      await db.push('servers', serverDetails);
+      const servers = await db.get('servers') || [];
+      servers.push(serverDetails);
+      await db.set('servers', servers);
+
+      if (!Array.isArray(user.servers)) {
+        user.servers = [];
+      }
+      user.servers.push(serverId);
+
+      users[email] = user;
+      await db.set('users', users);
 
       res.send('success');
     } catch (err) {
