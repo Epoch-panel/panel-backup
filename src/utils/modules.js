@@ -1,9 +1,7 @@
-const Keyv = require("keyv");
 global.fs = require('fs');
-global.db = new Keyv('sqlite://database.sqlite');
+global.db = require('../modules/db.js');
 global.path = require('path');
 global.encrypt = require('./encrypt.js')
 global.app = require('../modules/server.js')();
 global.core = require('./core.js')
 global.WebSocket = require('ws')
-global.next = require('next')

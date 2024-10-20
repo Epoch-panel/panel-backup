@@ -55,6 +55,7 @@ module.exports = async function () {
 
       res.send({ message: 'Registration successful', user: { email, username, permissions: 5 } });
     } catch (err) {
+      console.log(err)
       res.status(500).send({ error: 'Internal Server Error' });
     }
   });
