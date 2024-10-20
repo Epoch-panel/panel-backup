@@ -11,17 +11,16 @@ module.exports = async function () {
       const nodes = await db.get('nodes') || [];
       const aaada = nodes.find(n => n.name === node);
 
-
-      if (!aaada) {
+      /*if (!aaada) {
         return res.status(404).send('Node not found');
-      }
+      }*/
 
       let eggs = await db.get('softwares') || [];
 
       const software = eggs.find(s => s.name && s.name.toLowerCase() === softwarename.toLowerCase());
-      if (!software) {
+      /*if (!software) {
         return res.status(404).send('Software not found');
-      }
+      }*/
 
       let users = await db.get('users') || {};
       const user = users[email];

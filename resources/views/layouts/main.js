@@ -6,7 +6,6 @@ module.exports = function layout(content, context) {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <script src="https://cdn.tailwindcss.com"></script>
-        <title>${context.title || 'Default Title'}</title>
     </head>
     <body class="bg-zinc-950 relative h-full w-screen overflow-y-auto">
         ${content}
